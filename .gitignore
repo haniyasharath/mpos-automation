@@ -1,0 +1,13 @@
+.settings
+.metadata
+target
+.buildpath
+
+.class
+*.txt
+*.bak
+.log
+*.orig
+
+
+classes
