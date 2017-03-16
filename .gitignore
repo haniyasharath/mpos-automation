@@ -2,12 +2,12 @@
 .metadata
 target
 .buildpath
-
 .class
 *.txt
 *.bak
 .log
 *.orig
-
-
+.classpath
+.project
+bin/*
 classes
