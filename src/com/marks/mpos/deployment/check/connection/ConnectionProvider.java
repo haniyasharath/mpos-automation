@@ -38,7 +38,7 @@ public class ConnectionProvider {
 		return sshSession;
 	}
 	
-	public static Connection openSSHSessionToCloudAndConnect() throws JSchException {
+	public static Session openSSHSessionToCloud() throws JSchException {
 		final String SSH_STORE_HOST = "139.59.25.49";
 		final int LOCAL_PORT = Integer.parseInt("7123");
 		Session sshSession = new JSch().getSession("automation", SSH_STORE_HOST, SSH_PORT);
@@ -50,7 +50,12 @@ public class ConnectionProvider {
 		sshSession.setPortForwardingL(LOCAL_PORT, MARIA_DB_HOST, MARIA_DB_PORT);
 		System.out.println("PortForwarding done");
 		
+		return sshSession;
+	}
+	
+	public static Connection connectToCloud() {
 		Connection connection = null;
+		final int LOCAL_PORT = Integer.parseInt("9123");
 		try {
 			final String LOCAL_DATABASE_URL = MARIA_DB_URL_PREFIX + LOCAL_PORT + SLASH_SYMBOL + "portal";
 

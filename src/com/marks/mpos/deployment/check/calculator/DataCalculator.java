@@ -7,6 +7,8 @@ import java.io.File;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -28,10 +30,12 @@ import java.util.logging.Logger;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.UriBuilder;
 
+import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
 import com.marks.mpos.deployment.check.beans.BusinessAreaCounts;
 import com.marks.mpos.deployment.check.beans.CssHealth;
 import com.marks.mpos.deployment.check.beans.LaneCount;
+import com.marks.mpos.deployment.check.beans.MissingPriceEvent;
 import com.marks.mpos.deployment.check.beans.PriceEventLists;
 import com.marks.mpos.deployment.check.beans.StoreDetails;
 import com.marks.mpos.deployment.check.beans.StoreInfo;
@@ -490,14 +494,96 @@ public class DataCalculator {
 		return cssHealth;
 	}
 	
+	public void updateMissingPriceEventsToCloud(Set<MissingPriceEvent> missingPriceEvents) {
+		Connection connectionCloud = null;
+		Session sshSession = null;
+		try {
+			LocalDateTime runningTime = getCurrentTime();
+			StringBuilder query = new StringBuilder("INSERT INTO missing_price_event VALUES ");
+			for(MissingPriceEvent priceEvent : missingPriceEvents) {
+				query.append(",('").append(runningTime).append("',");
+				query.append("'").append(priceEvent.getPriceEvent()).append("',");
+				query.append("'").append(priceEvent.getStartDate()).append("',");
+				query.append("'").append(priceEvent.getEndDate()).append("',");
+				query.append("'").append(priceEvent.getEventType()).append("')");
+			}
+			sshSession = ConnectionProvider.openSSHSessionToCloud();
+			connectionCloud = ConnectionProvider.connectToCloud();
+			String queryToInsert = query.toString().replaceFirst(",", "");
+			LOG.info("Running query --> " + queryToInsert);
+			connectionCloud.createStatement().executeUpdate(queryToInsert);
+		} catch (JSchException e) {
+			e.printStackTrace();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			if (connectionCloud != null) {
+				try {
+					connectionCloud.close();
+				} catch (SQLException e) {
+					LOG.warning(e.getMessage());
+					e.printStackTrace();
+				}
+			}
+			if(sshSession != null) {
+				sshSession.disconnect();
+			}
+		}
+	}
+	
+	public void updateStorewiseMissingPriceEventsToCloud(String store, Set<MissingPriceEvent> missingPriceEvents) {
+		Connection connectionCloud = null;
+		Session sshSession = null;
+		try {
+			LocalDateTime runningTime = getCurrentTime();
+			StringBuilder query = new StringBuilder("INSERT INTO store_missing_price_event VALUES ");
+			for(MissingPriceEvent priceEvent : missingPriceEvents) {
+				query.append(",('").append(runningTime).append("',");
+				query.append("'").append(store).append("',");
+				query.append("'").append(priceEvent.getPriceEvent()).append("',");
+				query.append("'").append(priceEvent.getStartDate()).append("',");
+				query.append("'").append(priceEvent.getEndDate()).append("',");
+				query.append("'").append(priceEvent.getEventType()).append("')");
+			}
+			sshSession = ConnectionProvider.openSSHSessionToCloud();
+			connectionCloud = ConnectionProvider.connectToCloud();
+			String queryToInsert = query.toString().replaceFirst(",", "");
+			LOG.info("Running query --> " + queryToInsert);
+			connectionCloud.createStatement().executeUpdate(queryToInsert);
+		} catch (JSchException e) {
+			e.printStackTrace();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		} finally {
+			if (connectionCloud != null) {
+				try {
+					connectionCloud.close();
+				} catch (SQLException e) {
+					LOG.warning(e.getMessage());
+					e.printStackTrace();
+				}
+			}
+			if(sshSession != null) {
+				sshSession.disconnect();
+			}
+		}
+	}
+
+	private LocalDateTime getCurrentTime() {
+		DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
+		LocalDateTime runningTime = LocalDateTime.now();
+		runningTime.format(DATE_TIME_FORMATTER);
+		return runningTime;
+	}
+
 	public static void main(String[] args) {
-		//System.out.println("Count-->" +new DataCalculator().getCSSHealth().getUnSentQueueDepth());
+		/*System.out.println("Count-->" +new DataCalculator().getCSSHealth().getUnSentQueueDepth());
 		try {
 			final Connection connectionCloud = ConnectionProvider.openSSHSessionToCloudAndConnect();
 			ResultSet rsCloudCheck = connectionCloud.createStatement().executeQuery("Select * from users");
 			while (rsCloudCheck.next()) System.out.println(rsCloudCheck.getString("name"));
 		} catch (Exception e) {
 			e.printStackTrace();
-		}
+		}*/
 	}
 }

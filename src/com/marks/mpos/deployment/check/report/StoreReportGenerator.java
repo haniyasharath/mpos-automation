@@ -8,6 +8,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,11 +38,13 @@ import org.apache.poi.xwpf.usermodel.XWPFRun;
 import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 
+import com.jcraft.jsch.Session;
 import com.marks.mpos.deployment.check.beans.BusinessAreaCounts;
 import com.marks.mpos.deployment.check.beans.LaneCount;
 import com.marks.mpos.deployment.check.beans.StoreReport;
 import com.marks.mpos.deployment.check.beans.StoredDataCounts;
 import com.marks.mpos.deployment.check.beans.TransactionTotal;
+import com.marks.mpos.deployment.check.connection.ConnectionProvider;
 import com.marks.mpos.deployment.check.properties.UserProperties;
 import com.marks.mpos.deployment.check.splunk.CreateJSON;
 import com.marks.mpos.deployment.check.utils.DateUtil;
@@ -57,6 +62,7 @@ public class StoreReportGenerator {
 				+ File.separator + POST_CHECK_DATE;
 		final String fileNameForTransactionDetails = FILE_PATH + File.separator + "Transaction_details" + ".xlsx";
 		LOG.info("Writing to excel file name" + fileNameForTransactionDetails);
+		List<String> queryList = new ArrayList<String>();
 		XSSFWorkbook workbook = new XSSFWorkbook();
 		XSSFSheet sheet = workbook.createSheet("TransactionReport");
 		sheet.setColumnWidth(1, 4000);
@@ -113,6 +119,7 @@ public class StoreReportGenerator {
 		columnStyle.setFillPattern(HSSFCellStyle.ALIGN_FILL);*/
 		int rowid = 0;
 		for (Integer key : keyid) {
+			StringBuilder query = new StringBuilder("INSERT INTO Transaction VALUES (");
 			row = sheet.createRow(rowid++);
 			Object[] objectArr = excelreportinfo.get(key);
 			int cellid = 0;
@@ -120,16 +127,22 @@ public class StoreReportGenerator {
 				Cell cell = row.createCell(cellid++);
 				cell.setCellStyle(style);
 				if (obj instanceof String) {
+					query.append("," + (String) obj);
 					cell.setCellValue((String) obj);
 					//cell.setCellStyle(columnStyle);
 				}
 				if (obj instanceof Integer) {
+					query.append("," + (Integer) obj);
 					cell.setCellValue((Integer) obj);
 				}
 				if (obj instanceof Double) {
+					query.append("," + (Double) obj);
 					cell.setCellValue((Double) obj);
 				}
 			}
+			query.append(")");
+			String transactionQuery = query.toString().replaceFirst(",", "");
+			queryList.add(transactionQuery.toString());
 		}
 		// Write the workbook in file system
 		FileOutputStream out = new FileOutputStream(new File(fileNameForTransactionDetails));
@@ -137,6 +150,41 @@ public class StoreReportGenerator {
 		workbook.close();
 		out.close();
 		LOG.info("completed writing");
+		LOG.info("query list size is " + queryList.size());
+		LOG.info("sample query to insert is " + queryList.get(1));
+		LOG.info("sample query to insert is " + queryList.get(queryList.size() - 1));
+		writeToCloudTable(queryList);
+
+	}
+
+	public static void writeToCloudTable(List<String> queryList) {
+		Connection connectionCloud = null;
+		Session sshSession = null;
+		try {
+			sshSession = ConnectionProvider.openSSHSessionToCloud();
+			connectionCloud = ConnectionProvider.connectToCloud();
+			System.out.println("before executing insert query");
+			// connectionCloud.createStatement().executeUpdate(queryList.get(20));
+			for (int i=1;i<queryList.size()-1;i++) {
+				connectionCloud.createStatement().executeUpdate(queryList.get(i));
+			}
+			System.out.println("after execution of insert query");
+
+		} catch (Exception e) {
+			e.printStackTrace();
+		} finally {
+			if (connectionCloud != null) {
+				try {
+					connectionCloud.close();
+				} catch (SQLException e) {
+					LOG.warning(e.getMessage());
+					e.printStackTrace();
+				}
+			}
+			if(sshSession != null) {
+				sshSession.disconnect();
+			}
+		}
 	}
 
 	public static void generateReportsForStores(List<StoreReport> storeDataList) {

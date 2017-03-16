@@ -38,6 +38,7 @@ import com.marks.mpos.deployment.check.beans.BusinessAreaCounts;
 import com.marks.mpos.deployment.check.beans.CBODetails;
 import com.marks.mpos.deployment.check.beans.CssHealth;
 import com.marks.mpos.deployment.check.beans.LaneCount;
+import com.marks.mpos.deployment.check.beans.MissingPriceEvent;
 import com.marks.mpos.deployment.check.beans.PriceEventLists;
 import com.marks.mpos.deployment.check.beans.StoreDetails;
 import com.marks.mpos.deployment.check.beans.StoreInfo;
@@ -74,6 +75,7 @@ public class StoreDataBuilder {
 	private static Set<String> MISSING_SPECIAL_PRICE_EVENTS = new HashSet<String>();
 	private static Set<String> MISSING_XFORY_PRICE_EVENTS = new HashSet<String>();
 	private static Set<String> MISSING_BOGO_PRICE_EVENTS = new HashSet<String>();
+	private static Map<String, Set<String>> STOREWISE_MISSING_PRICE_EVENTS = new HashMap<String, Set<String>>();
 	private static int journalCount = 0;
 	private static double voidedTotalLBO = 0;
 	private static double nonVoidedTotalLBO = 0;
@@ -503,6 +505,68 @@ public class StoreDataBuilder {
 		MISSING_BOGO_PRICE_EVENTS.stream().forEach(event -> builder.append(event + " "));
 		
 		LOG.info(builder.toString());
+		Set<String> missedAllPriceEvents = new HashSet<String>();
+		missedAllPriceEvents.addAll(MISSING_PRICE_EVENTS);
+		missedAllPriceEvents.addAll(MISSING_SPECIAL_PRICE_EVENTS);
+		missedAllPriceEvents.addAll(MISSING_XFORY_PRICE_EVENTS);
+		missedAllPriceEvents.addAll(MISSING_BOGO_PRICE_EVENTS);
+		Set<MissingPriceEvent> missingPriceEvents = getPriceEventEvents(missedAllPriceEvents);
+		if (CollectionUtils.isNotEmpty(missingPriceEvents)) {
+			dataCalculator.updateMissingPriceEventsToCloud(missingPriceEvents);
+		}
+		LOG.info("Missing price events in Total Stores " + STOREWISE_MISSING_PRICE_EVENTS.size());
+		for (String store : STOREWISE_MISSING_PRICE_EVENTS.keySet()) {
+			Set<String> storewiseMissingPriceEvent = STOREWISE_MISSING_PRICE_EVENTS.get(store);
+			if (CollectionUtils.isNotEmpty(storewiseMissingPriceEvent)) {
+				Set<MissingPriceEvent> storewiseMissingPriceEventsList = missingPriceEvents.stream()
+						.filter(priceEvent -> storewiseMissingPriceEvent.contains(priceEvent.getPriceEvent()))
+						.collect(Collectors.toSet());
+				dataCalculator.updateStorewiseMissingPriceEventsToCloud(store, storewiseMissingPriceEventsList);
+			}
+		}
+	}
+
+	private static Set<MissingPriceEvent> getPriceEventEvents(Set<String> missedAllPriceEvents) {
+		Set<MissingPriceEvent> missingPriceEvents = new HashSet<MissingPriceEvent>();
+		Connection connectionPPS = null;
+		try {
+			connectionPPS = ConnectionProvider.getOracleDBConnection(PPS_DB_NAME);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		StringBuilder priceEvents = new StringBuilder();
+		missedAllPriceEvents.stream().forEach(priceEvent -> priceEvents.append(",'" + priceEvent + "'"));
+		priceEvents.append(")");
+		String peQuery = priceEvents.toString().replaceFirst(",", "");
+		ResultSet rsCBOPriceEvent;
+		try {
+			rsCBOPriceEvent = connectionPPS.createStatement().executeQuery(CBO_GET_ITEM_PRICE_EVENT + peQuery);
+			MissingPriceEvent missingPriceEvent;
+			while (rsCBOPriceEvent.next()) {
+				missingPriceEvent = new MissingPriceEvent();
+				missingPriceEvent.setPriceEvent(rsCBOPriceEvent.getString("ItemPriceEventNumber"));
+				missingPriceEvent.setStartDate(rsCBOPriceEvent.getString("CURRSALEUNITRETAILPRICEEFFDT"));
+				missingPriceEvent.setEndDate(rsCBOPriceEvent.getString("CURRSALEUNITRETAILPRICEEXPDT"));
+				missingPriceEvent.setEventType("BasicPrice");
+				missingPriceEvents.add(missingPriceEvent);
+			}
+			
+			LOG.info("Query running " + CBO_GET_PRICE_EVENT + peQuery);
+			rsCBOPriceEvent = connectionPPS.createStatement().executeQuery(CBO_GET_PRICE_EVENT + peQuery);
+			while (rsCBOPriceEvent.next()) {
+				missingPriceEvent = new MissingPriceEvent();
+				missingPriceEvent.setPriceEvent(rsCBOPriceEvent.getString("PriceDerivRuleEventNumber"));
+				missingPriceEvent.setStartDate(rsCBOPriceEvent.getString("EFFECTIVEDT"));
+				missingPriceEvent.setEndDate(rsCBOPriceEvent.getString("EXPIRATIONDT"));
+				missingPriceEvent.setEventType(rsCBOPriceEvent.getString("PriceDerivationRule_type"));
+				missingPriceEvents.add(missingPriceEvent);
+			}
+			LOG.info("Size of the String " + missingPriceEvents.size());
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return missingPriceEvents;
 	}
 
 	private static void showProductAndPriceEventMismatchForEachStores(List<StoreReport> storeDataList) {
@@ -611,6 +675,15 @@ public class StoreDataBuilder {
 
 			cboBasicPriceEvents.removeAll(lboBasicPriceEvents);
 			cboBasicPriceEvents.stream().forEach(events -> builder.append(events + " "));
+		}
+		if(CollectionUtils.isNotEmpty(cboBasicPriceEvents)) {
+			if (STOREWISE_MISSING_PRICE_EVENTS.containsKey(store)) {
+				STOREWISE_MISSING_PRICE_EVENTS.get(store).addAll(cboBasicPriceEvents);
+			} else {
+				Set<String> priceEventList = new HashSet<String>();
+				priceEventList.addAll(cboBasicPriceEvents);
+				STOREWISE_MISSING_PRICE_EVENTS.put(store, priceEventList);
+			}
 		}
 		return cboBasicPriceEvents;
 	}

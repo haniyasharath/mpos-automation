@@ -9,6 +9,7 @@ import java.time.LocalDateTime;
 import java.util.logging.Logger;
 
 import com.marks.mpos.deployment.check.beans.StoreReport;
+import com.marks.mpos.deployment.check.cloud.delete.DeleteRecordsCloud;
 import com.marks.mpos.deployment.check.logger.AutomationLogger;
 import com.marks.mpos.deployment.check.properties.UserProperties;
 import com.marks.mpos.deployment.check.report.StoreDataBuilder;
@@ -117,6 +118,9 @@ public class DeploymentCheck {
 				}
 			}
 		}
+		
+		String interval = prop.get().getProperty("interval");
+		DeleteRecordsCloud.deleteRecordsCloud(interval);
 		
 		LocalDateTime endingTime = LocalDateTime.now();
 		LOG.info("Finshing Time " + endingTime);

@@ -129,9 +129,13 @@ public class IDatabaseQueries {
 	public static final String LBO_GET_ITEM = "SELECT item_number FROM backoffice.ITEM where item_number IN (";
 	
 	public static final String LBO_GET_PRICE_EVENT = "select PriceDerivRuleEventNumber from pe.promotionzone where PriceDerivRuleEventNumber IN (";
+	
+	public static final String CBO_GET_PRICE_EVENT = "select * from promotionzone pz, pricederivationrule pr where pr.PriceDerivRuleEventNumber=pz.PriceDerivRuleEventNumber AND pz.PriceDerivRuleEventNumber IN (";
+	
 	public static final String LBO_GET_DELETED_PRICE_EVENT = "select * from pe.itempricemaintenance where STATUS ='DELETED' AND ItemPriceEventNumber IN ('348340')";
 	public static final String LBO_GET_ITEM_PRICE_EVENT = "select distinct ITEMPRICEEVENTNUMBER from pe.itempricemaintenance where ITEMPRICEEVENTNUMBER IN (";
-			
+	
+	public static final String CBO_GET_ITEM_PRICE_EVENT = "select distinct ITEMPRICEEVENTNUMBER, CURRSALEUNITRETAILPRICEEFFDT, CURRSALEUNITRETAILPRICEEXPDT from itempricemaintenance where ITEMPRICEEVENTNUMBER IN (";
 	public static final String CSS_QUEUE_DEPTH_CHECK = "SELECT COUNT(*) FROM JMS_TEXT_MESSAGE WHERE STATUS != 'SENT'";
 	
 	public static final String LBO_QUEUE_DEPTH_CHECK = "SELECT COUNT(*) FROM OUTGOING_TEXT_MESSAGE WHERE STATUS != 'SENT'";
